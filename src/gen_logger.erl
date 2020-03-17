@@ -45,7 +45,12 @@
 
 -type(logcfg() :: level() | {module(), level()}).
 
+-ifdef(OTP_RELEASE).
+%% OTP 21 - no parameterized modules
+-type(logmod() :: atom()).
+-else.
 -type(logmod() :: {gen_logger, module(), level()}).
+-endif.
 
 -export_type([level/0, logcfg/0, logmod/0]).
 
@@ -85,6 +90,12 @@ behaviour_info(_Other) ->
 
 -endif.
 
+-ifdef(OTP_RELEASE).
+-define(USE_PMODS, false).
+-else.
+-define(USE_PMODS, true).
+-endif.
+
 %%%=========================================================================
 %%% gen_logger API
 %%%=========================================================================
@@ -95,10 +106,16 @@ new(Level) when is_atom(Level) -> new(console, Level);
 new({Name, Level}) -> new(Name, Level).
 
 -spec(new(Name :: atom(), Level :: level()) -> logmod()).
-new(Name, Level) when is_atom(Name) and is_atom(Level) ->
+new(Name, Level) when is_atom(Name), is_atom(Level) ->
     LogMod = logmod(Name),
     {module, LogMod} = code:ensure_loaded(LogMod),
-    {?MODULE, LogMod, ?LOG_LEVEL_NUM(Level)}.
+    case ?USE_PMODS of
+        true ->
+            {?MODULE, LogMod, ?LOG_LEVEL_NUM(Level)};
+        false ->
+            gen_logger2:set_logger(Name, Level),
+            gen_logger2
+    end.
 
 logmod(Name) -> list_to_atom(lists:concat([Name, "_logger"])).
 
